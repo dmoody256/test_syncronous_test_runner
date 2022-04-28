@@ -1,9 +1,5 @@
 import SCons
 
-env = Environment()
-env.Tool('textfile')
-nodes = []
-
 # A bound map of stream (as in stream of work) name to side-effect
 # file. Since SCons will not allow tasks with a shared side-effect
 # to execute concurrently, this gives us a way to limit link jobs
@@ -22,11 +18,20 @@ def sync_se_emitter(target, source, env):
     env.SideEffect(se_node, target)
     return (target, source)
 
-for target_builder in env['BUILDERS']:
-    builder = env['BUILDERS'][target_builder]
-    base_emitter = builder.emitter
-    new_emitter = SCons.Builder.ListEmitter([base_emitter, sync_se_emitter])
-    builder.emitter = new_emitter
+original_create_nodes = SCons.Builder.BuilderBase._create_nodes
+def always_emitter_create_nodes(self, env, target = None, source = None):
+    if hasattr(self, 'name') and self.name != "SynchronousTestRunner":
+        if self.emitter:
+            self.emitter = SCons.Builder.ListEmitter([self.emitter, sync_se_emitter])
+        else:
+            self.emitter = SCons.Builder.ListEmitter([sync_se_emitter])
+    return original_create_nodes(self, env, target, source)
+SCons.Builder.BuilderBase._create_nodes = always_emitter_create_nodes
+
+
+env = Environment()
+env.Tool('textfile')
+nodes = []
 
 env['BUILDERS']["SynchronousTestRunner"] = SCons.Builder.Builder(
     action=SCons.Action.Action([
@@ -42,10 +47,10 @@ def sync_test_emitter(target, source, env):
         env.SideEffect(name, target)
     return (target, source)
 
-env['BUILDERS']["SynchronousTestRunner"].emitter = SCons.Builder.ListEmitter([builder.emitter, sync_test_emitter])
+env['BUILDERS']["SynchronousTestRunner"].emitter = SCons.Builder.ListEmitter([sync_test_emitter])
 
 env.SynchronousTestRunner("test.out", "source10.c")
-env.SynchronousTestRunner("test2.out", "source12.c")
+env.SynchronousTestRunner("test2.out", "source62.c")
 
 for i in range(50):
     nodes.append(env.Textfile(f"source{i}.c", f"int func{i}(){{return {i};}}"))
