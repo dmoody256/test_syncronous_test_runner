@@ -7,8 +7,13 @@ import SCons
 node_map = dict()
 
 # A list of nodes that have to be run synchronously.
+# sync node ensures the test runners are syncrhonous amongst
+# themselves.
 sync_nodes = list()
 
+# this emitter will make a phony sideeffect per target
+# the test builders will share all the other sideeffects making
+# sure the tests only run when nothing else is running.
 def sync_se_emitter(target, source, env):
     name = str(target[0])
     se_name = "#unique_node_" + str(hash(name))
@@ -23,6 +28,10 @@ def sync_se_emitter(target, source, env):
     env.SideEffect(se_node, target)
     return (target, source)
 
+# here we force all builders to use the emitter, so all
+# targets will respect the shared sideeffect when being built.
+# NOTE: that the builders which should be synchronous must be listed
+# by name, as SynchronousTestRunner is in this example
 original_create_nodes = SCons.Builder.BuilderBase._create_nodes
 def always_emitter_create_nodes(self, env, target = None, source = None):
     if self.get_name(env) != "SynchronousTestRunner":
@@ -38,6 +47,7 @@ env = Environment()
 env.Tool('textfile')
 nodes = []
 
+# this is a fake test runner which acts like its running a test
 env['BUILDERS']["SynchronousTestRunner"] = SCons.Builder.Builder(
     action=SCons.Action.Action([
         "sleep 1",
@@ -47,6 +57,7 @@ env['BUILDERS']["SynchronousTestRunner"] = SCons.Builder.Builder(
         'echo done > $TARGET'],
     None))
 
+# this emitter connects the test runners with the shared sideeffect
 def sync_test_emitter(target, source, env):
     for name in node_map:
         env.SideEffect(name, target)
@@ -55,6 +66,10 @@ def sync_test_emitter(target, source, env):
 
 env['BUILDERS']["SynchronousTestRunner"].emitter = SCons.Builder.ListEmitter([sync_test_emitter])
 
+# in this test we create two test runners and make them depend on various source files
+# being generated. This is just to force the tests to be run in the middle of
+# the build. This will allow the example to demonstrate that all other jobs
+# have paused so the test can be performed.
 env.SynchronousTestRunner("test.out", "source10.c")
 env.SynchronousTestRunner("test2.out", "source62.c")
 
