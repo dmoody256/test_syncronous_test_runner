@@ -6,6 +6,9 @@ import SCons
 # independently of overall SCons concurrency.
 node_map = dict()
 
+# A list of nodes that have to be run synchronously.
+sync_nodes = list()
+
 def sync_se_emitter(target, source, env):
     name = str(target[0])
     se_name = "#unique_node_" + str(hash(name))
@@ -15,6 +18,8 @@ def sync_se_emitter(target, source, env):
         # This may not be necessary, but why chance it
         env.NoCache(se_node)
         node_map[se_name] = se_node
+        for sync_node in sync_nodes:
+            env.SideEffect(se_name, sync_node)
     env.SideEffect(se_node, target)
     return (target, source)
 
@@ -45,6 +50,7 @@ env['BUILDERS']["SynchronousTestRunner"] = SCons.Builder.Builder(
 def sync_test_emitter(target, source, env):
     for name in node_map:
         env.SideEffect(name, target)
+    sync_nodes.append(target)
     return (target, source)
 
 env['BUILDERS']["SynchronousTestRunner"].emitter = SCons.Builder.ListEmitter([sync_test_emitter])
