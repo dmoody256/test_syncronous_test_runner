@@ -20,7 +20,7 @@ def sync_se_emitter(target, source, env):
 
 original_create_nodes = SCons.Builder.BuilderBase._create_nodes
 def always_emitter_create_nodes(self, env, target = None, source = None):
-    if hasattr(self, 'name') and self.name != "SynchronousTestRunner":
+    if self.get_name(env) != "SynchronousTestRunner":
         if self.emitter:
             self.emitter = SCons.Builder.ListEmitter([self.emitter, sync_se_emitter])
         else:
